@@ -1,10 +1,3 @@
-import streamlit as st
-from streamlit_drawable_canvas import st_canvas
-from PIL import Image, ImageDraw, ImageFont
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
-
 st.title("Venous Pressure Annotation App")
 
 st.write("""
