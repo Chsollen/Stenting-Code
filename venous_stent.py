@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
+import numpy as np
 
 st.title("Venous Pressure Annotation App")
 
@@ -45,7 +46,7 @@ if uploaded_file is not None:
         fill_color="rgba(255, 0, 0, 0.3)",  # required parameter, but not used here
         stroke_width=3,
         stroke_color="red",
-        background_image=resized_image,
+        background_image=np.array(resized_image),
         update_streamlit=True,
         height=display_height,
         width=display_width,
