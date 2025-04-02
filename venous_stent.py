@@ -41,25 +41,21 @@ if uploaded_file is not None:
     resized_image = image.resize((display_width, display_height))
     st.image(resized_image, caption="Uploaded Image", width=display_width)
     
-    # Convert resized_image to RGB and then to a NumPy array
+    # Convert resized_image to RGB and then to a contiguous NumPy array of type uint8
     bg_image = np.ascontiguousarray(np.array(resized_image.convert("RGB")), dtype=np.uint8)
-
-
     
     # 2. Create a drawing canvas overlay on the resized image using the NumPy array
     canvas_result = st_canvas(
-    fill_color="rgba(255, 0, 0, 0.3)",  # required parameter, but not used here
-    stroke_width=3,
-    stroke_color="red",
-    background_image=bg_image,
-    update_streamlit=True,
-    height=display_height,
-    width=display_width,
-    drawing_mode="point",
-    key="canvas",
+        fill_color="rgba(255, 0, 0, 0.3)",  # required parameter, but not used here
+        stroke_width=3,
+        stroke_color="red",
+        background_image=bg_image,
+        update_streamlit=True,
+        height=display_height,
+        width=display_width,
+        drawing_mode="point",
+        key="canvas",
     )
-
-
     
     # Initialize session state for annotations and next annotation ID if not already set
     if "annotations" not in st.session_state:
