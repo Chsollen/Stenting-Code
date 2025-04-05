@@ -142,10 +142,10 @@ if uploaded_file is not None:
         st.sidebar.write("No annotations yet.")
     
     # 5. Generate and display side by side:
-    #    - Left: The original image you clicked on with drawn markers.
+    #    - Left: The original image (the one you clicked on) with drawn markers.
     #    - Right: The annotated image with large text drawn.
     if st.button("Generate and Save Annotated Image"):
-        # Left image: Draw markers (red if unannotated, green if annotated) on the original resized image.
+        # Left image: Draw markers (red if unannotated, green if annotated) on a copy of the original resized image.
         left_image = resized_image.copy()
         draw_left = ImageDraw.Draw(left_image)
         r = 6  # marker radius
@@ -165,11 +165,14 @@ if uploaded_file is not None:
         # Right image: Draw the annotation text onto a copy of the original image.
         right_image = resized_image.copy()
         draw_right = ImageDraw.Draw(right_image)
+        # Try to use a bold font; if unavailable, fall back to a regular one. Set font size to 200.
         try:
-            # Use a very large font size (160) to make the text about 3x larger.
-            font = ImageFont.truetype("arial.ttf", 160)
+            font = ImageFont.truetype("arialbd.ttf", 200)
         except Exception:
-            font = ImageFont.load_default()
+            try:
+                font = ImageFont.truetype("arial.ttf", 200)
+            except Exception:
+                font = ImageFont.load_default()
         for ann in st.session_state.annotations:
             text = ann["value"]
             offset = (5, -5)
@@ -182,12 +185,12 @@ if uploaded_file is not None:
                 stroke_fill="black"
             )
         
-        # Display the two images side by side.
+        # Display the two images side by side using columns.
         col1, col2 = st.columns(2)
         with col1:
-            st.image(left_image, caption="Original Image (with markers)", use_column_width=True)
+            st.image(left_image, caption="Original Image (with markers)", use_container_width=True)
         with col2:
-            st.image(right_image, caption="Annotated Image (with large text)", use_column_width=True)
+            st.image(right_image, caption="Annotated Image (with large text)", use_container_width=True)
         
         # Save the annotated image to bytes for download.
         buf_img = io.BytesIO()
