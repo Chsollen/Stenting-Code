@@ -3,8 +3,8 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 import io
+import base64
 
 st.title("Venous Pressure Annotation App")
 
@@ -41,15 +41,17 @@ if uploaded_file is not None:
     resized_image = image.resize((display_width, display_height))
     st.image(resized_image, caption="Uploaded Image", width=display_width)
     
-    # Convert the PIL image to a NumPy array for compatibility
-    resized_image_np = np.array(resized_image)
+    # Convert the PIL image to a data URL string
+    buf = io.BytesIO()
+    resized_image.save(buf, format="PNG")
+    background_image_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
     
     # 2. Create a drawing canvas overlay on the resized image
     canvas_result = st_canvas(
         fill_color="rgba(255, 0, 0, 0.3)",  # required parameter, but not used here
         stroke_width=3,
         stroke_color="red",
-        background_image=resized_image_np,  # Pass the NumPy array here
+        background_image=background_image_url,  # Use the data URL string here
         update_streamlit=True,
         height=display_height,
         width=display_width,
