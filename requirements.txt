@@ -1,7 +1,7 @@
-streamlit==1.44.1
-streamlit-plotly-events==0.4.1
-plotly==5.14.0
-Pillow==9.0.1
-pandas==1.5.0
-matplotlib==3.6.0
-numpy==1.24.3
+streamlit
+streamlit-plotly-events
+plotly
+Pillow
+pandas
+matplotlib
+numpy
