@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_plotly_events import plotly_events  # Install: pip install streamlit-plotly-events
+from streamlit_plotly_events import plotly_events  # pip install streamlit-plotly-events
 import plotly.express as px
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
@@ -11,7 +11,7 @@ st.title("Venous Pressure Annotation App (Without st_canvas)")
 
 st.write("""
 Upload an image, then click on the image to add annotation points.  
-Each click is recorded and the annotation details (location and pressure) can be added via the forms below.
+Each click is recorded and you can add annotation details (location and pressure) via the forms below.
 """)
 
 # Venous locations list, including "Occlusion"
@@ -64,28 +64,51 @@ if uploaded_file is not None:
     fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
     
-    # Capture click events on the Plotly image.
-    clicked_points = plotly_events(
+    # If there are already clicked points, add them as red markers.
+    if st.session_state.clicked_points:
+        fig.add_scatter(
+            x=[pt["x"] for pt in st.session_state.clicked_points],
+            y=[pt["y"] for pt in st.session_state.clicked_points],
+            mode="markers",
+            marker=dict(size=12, color="red"),
+            name="Clicked Points"
+        )
+    
+    # Capture new click events on the Plotly image.
+    new_clicked = plotly_events(
         fig,
         click_event=True,
         override_height=display_height,
         override_width=display_width
     )
-    
-    # Update session state with new clicked points.
-    if clicked_points:
-        for pt in clicked_points:
+    if new_clicked:
+        for pt in new_clicked:
             add_clicked_point({"x": pt.get("x"), "y": pt.get("y")})
     
+    # Refresh the Plotly figure with all clicked points.
+    fig.data = []  # clear previous traces
+    fig = px.imshow(img_array)
+    fig.update_yaxes(autorange='reversed')
+    fig.update_layout(clickmode='event+select')
+    if st.session_state.clicked_points:
+        fig.add_scatter(
+            x=[pt["x"] for pt in st.session_state.clicked_points],
+            y=[pt["y"] for pt in st.session_state.clicked_points],
+            mode="markers",
+            marker=dict(size=12, color="red"),
+            name="Clicked Points"
+        )
     st.plotly_chart(fig, use_container_width=True)
     
-    st.write("Below are forms for adding details to new annotations (for each point you clicked).")
+    st.write("Below are forms for adding details to each new annotation (for each point you clicked).")
     
     # 3. For each clicked point that is not yet annotated, display a form to add annotation details.
     tolerance = 5
     for pt in st.session_state.clicked_points:
-        already_annotated = any(abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
-                                 for ann in st.session_state.annotations)
+        already_annotated = any(
+            abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
+            for ann in st.session_state.annotations
+        )
         if not already_annotated:
             with st.expander(f"Add Annotation at (x={pt['x']:.0f}, y={pt['y']:.0f})"):
                 location = st.selectbox("Select location:", LOCATIONS, key=f"loc_{pt['x']}_{pt['y']}")
@@ -119,32 +142,52 @@ if uploaded_file is not None:
         st.sidebar.write("No annotations yet.")
     
     # 5. Generate and display side by side:
-    #    - The original image that was clicked (left)
-    #    - The annotated image with text drawn (right)
+    #    - Left: The original image you clicked on with drawn markers.
+    #    - Right: The annotated image with large text drawn.
     if st.button("Generate and Save Annotated Image"):
-        # Left image: simply use the original resized image (the one you clicked on)
+        # Left image: Draw markers (red if unannotated, green if annotated) on the original resized image.
         left_image = resized_image.copy()
+        draw_left = ImageDraw.Draw(left_image)
+        r = 6  # marker radius
+        tolerance = 5
+        for pt in st.session_state.clicked_points:
+            annotated = any(
+                abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
+                for ann in st.session_state.annotations
+            )
+            color = "green" if annotated else "red"
+            draw_left.ellipse(
+                [(pt["x"] - r, pt["y"] - r), (pt["x"] + r, pt["y"] + r)],
+                fill=color,
+                outline=color
+            )
         
-        # Right image: draw the annotations (text) onto a copy of the resized image.
+        # Right image: Draw the annotation text onto a copy of the original image.
         right_image = resized_image.copy()
-        draw_text = ImageDraw.Draw(right_image)
+        draw_right = ImageDraw.Draw(right_image)
         try:
-            # Use a larger font size (144 for roughly 3x larger text than a baseline of 48)
-            font = ImageFont.truetype("arial.ttf", 144)
+            # Use a very large font size (160) to make the text about 3x larger.
+            font = ImageFont.truetype("arial.ttf", 160)
         except Exception:
             font = ImageFont.load_default()
         for ann in st.session_state.annotations:
             text = ann["value"]
             offset = (5, -5)
-            draw_text.text((ann["x"] + offset[0], ann["y"] + offset[1]), text,
-                           fill="#FFFFFF", font=font, stroke_width=2, stroke_fill="black")
+            draw_right.text(
+                (ann["x"] + offset[0], ann["y"] + offset[1]),
+                text,
+                fill="#FFFFFF",
+                font=font,
+                stroke_width=2,
+                stroke_fill="black"
+            )
         
-        # Display the two images side by side using columns.
+        # Display the two images side by side.
         col1, col2 = st.columns(2)
         with col1:
-            st.image(left_image, caption="Original Image (clicked)", use_column_width=True)
+            st.image(left_image, caption="Original Image (with markers)", use_column_width=True)
         with col2:
-            st.image(right_image, caption="Annotated Image (with text)", use_column_width=True)
+            st.image(right_image, caption="Annotated Image (with large text)", use_column_width=True)
         
         # Save the annotated image to bytes for download.
         buf_img = io.BytesIO()
@@ -161,7 +204,11 @@ if uploaded_file is not None:
         fig_table, ax = plt.subplots(figsize=(6, len(df_summary) * 0.5 + 1))
         ax.axis('tight')
         ax.axis('off')
-        table = ax.table(cellText=df_summary.values, colLabels=["Location", "Pressure (mmHg)"], loc='center')
+        table = ax.table(
+            cellText=df_summary.values,
+            colLabels=["Location", "Pressure (mmHg)"],
+            loc='center'
+        )
         for (i, j), cell in table.get_celld().items():
             if i == 0:
                 cell.set_text_props(weight='bold', ha='center')
