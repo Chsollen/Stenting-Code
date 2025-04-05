@@ -60,7 +60,7 @@ if uploaded_file is not None:
     img_array = np.array(resized_image)
     
     # 2. Create a Plotly figure to display the image and capture click events.
-    # Force the y-axis to be reversed so that the coordinate system matches the PIL image.
+    # Reverse the y-axis so that coordinates match the PIL image.
     fig = px.imshow(img_array)
     fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
@@ -145,30 +145,46 @@ if uploaded_file is not None:
     else:
         st.sidebar.write("No annotations yet.")
     
-    # 5. Generate annotated image and summary table as PNG for download.
+    # 5. Generate annotated image and display it side by side with the clicked image.
     if st.button("Generate and Save Annotated Image"):
+        # Create an image with markers drawn on it (Clicked Image)
+        clicked_image = resized_image.copy()
+        draw_click = ImageDraw.Draw(clicked_image)
+        tolerance = 5
+        for pt in st.session_state.clicked_points:
+            annotated = any(abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
+                            for ann in st.session_state.annotations)
+            color = "green" if annotated else "red"
+            r = 6  # marker radius
+            draw_click.ellipse([(pt["x"] - r, pt["y"] - r), (pt["x"] + r, pt["y"] + r)], fill=color, outline=color)
+        
+        # Create Annotated Image with text drawn on it.
         annotated_image = resized_image.copy()
-        draw = ImageDraw.Draw(annotated_image)
+        draw_text = ImageDraw.Draw(annotated_image)
         try:
-            # Use a larger font size (double the previous size, 96 instead of 48)
+            # Use a larger font size (96)
             font = ImageFont.truetype("arial.ttf", 96)
         except Exception:
             font = ImageFont.load_default()
         for ann in st.session_state.annotations:
             text = ann["value"]
             offset = (5, -5)
-            draw.text(
-                (ann["x"] + offset[0], ann["y"] + offset[1]),
-                text,
-                fill="#FFFFFF",
-                font=font,
-                stroke_width=2,
-                stroke_fill="black"
-            )
+            draw_text.text((ann["x"] + offset[0], ann["y"] + offset[1]), text,
+                           fill="#FFFFFF", font=font, stroke_width=2, stroke_fill="black")
+        
+        # Display the two images side by side.
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(clicked_image, caption="Clicked Image (with markers)", use_column_width=True)
+        with col2:
+            st.image(annotated_image, caption="Annotated Image (with text)", use_column_width=True)
+        
+        # Save annotated image to bytes for download.
         buf_img = io.BytesIO()
         annotated_image.save(buf_img, format="PNG")
         annotated_image_bytes = buf_img.getvalue()
         
+        # Generate a summary table as before.
         df_full = pd.DataFrame(st.session_state.annotations)
         if not df_full.empty:
             df_summary = df_full[df_full["location"] != "Occlusion"][["location", "value"]]
@@ -178,11 +194,7 @@ if uploaded_file is not None:
         fig_table, ax = plt.subplots(figsize=(6, len(df_summary) * 0.5 + 1))
         ax.axis('tight')
         ax.axis('off')
-        table = ax.table(
-            cellText=df_summary.values,
-            colLabels=["Location", "Pressure (mmHg)"],
-            loc='center'
-        )
+        table = ax.table(cellText=df_summary.values, colLabels=["Location", "Pressure (mmHg)"], loc='center')
         for (i, j), cell in table.get_celld().items():
             if i == 0:
                 cell.set_text_props(weight='bold', ha='center')
