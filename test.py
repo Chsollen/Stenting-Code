@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import io
 import matplotlib.pyplot as plt
+import base64
 
 st.title("Venous Pressure Annotation App (Without st_canvas)")
 
@@ -60,7 +61,7 @@ if uploaded_file is not None:
     img_array = np.array(resized_image)
     
     # 2. Create a Plotly figure to display the image and capture click events.
-    # Reverse the y-axis so coordinates match the PIL image.
+    # Reverse the y-axis so that coordinates match the PIL image.
     fig = px.imshow(img_array)
     fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
@@ -172,10 +173,19 @@ if uploaded_file is not None:
             draw_text.text((ann["x"] + offset[0], ann["y"] + offset[1]), text,
                            fill="#FFFFFF", font=font, stroke_width=2, stroke_fill="black")
         
-        # Use st.columns with explicit ratios to display images side by side.
-        cols = st.columns([1, 1])
-        cols[0].image(clicked_image, caption="Clicked Image (with markers)", use_column_width=True)
-        cols[1].image(annotated_image, caption="Annotated Image (with text)", use_column_width=True)
+        # Inject custom CSS to force columns not to wrap.
+        st.markdown("""
+        <style>
+        /* Force the container for st.columns to not wrap */
+        .stColumns { flex-wrap: nowrap !important; }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(clicked_image, caption="Clicked Image (with markers)", use_column_width=True)
+        with col2:
+            st.image(annotated_image, caption="Annotated Image (with text)", use_column_width=True)
         
         # Save annotated image to bytes for download.
         buf_img = io.BytesIO()
