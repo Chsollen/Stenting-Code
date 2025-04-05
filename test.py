@@ -170,7 +170,7 @@ if uploaded_file is not None:
             font = ImageFont.truetype("arialbd.ttf", 1000)
         except Exception:
             try:
-                font = ImageFont.truetype("arial.ttf", 200)
+                font = ImageFont.truetype("arial.ttf", 1000)
             except Exception:
                 font = ImageFont.load_default()
         for ann in st.session_state.annotations:
