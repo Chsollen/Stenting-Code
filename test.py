@@ -132,7 +132,7 @@ if uploaded_file is not None:
                 st.session_state.annotations.append(annotation)
                 st.session_state.next_id += 1
                 st.success(f"Annotation {annotation['id']} added!")
-                st.experimental_rerun()
+                # No forced rerun; the app will update on the next interaction.
     
     # 4. Display current annotations in the sidebar with delete options.
     st.sidebar.title("Annotations")
@@ -142,7 +142,7 @@ if uploaded_file is not None:
             if st.sidebar.button("Delete", key=f"delete_{ann['id']}"):
                 st.session_state.annotations = [a for a in st.session_state.annotations if a["id"] != ann["id"]]
                 st.sidebar.success(f"Annotation {ann['id']} deleted!")
-                st.experimental_rerun()
+                # No forced rerun here either.
     else:
         st.sidebar.write("No annotations yet.")
     
