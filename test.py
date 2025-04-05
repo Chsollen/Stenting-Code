@@ -59,11 +59,13 @@ if uploaded_file is not None:
     # Convert the PIL image to a numpy array for Plotly
     img_array = np.array(resized_image)
     
-    # 2. Create a Plotly figure to display the image and capture click events
+    # 2. Create a Plotly figure to display the image and capture click events.
+    # Force the y-axis to be reversed so that the coordinate system matches the PIL image.
     fig = px.imshow(img_array)
+    fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
     
-    # Capture click events on the Plotly image
+    # Capture click events on the Plotly image.
     clicked_points = plotly_events(
         fig,
         click_event=True,
@@ -71,12 +73,12 @@ if uploaded_file is not None:
         override_width=display_width
     )
     
-    # Update session state with new clicked points
+    # Update session state with new clicked points.
     if clicked_points:
         for pt in clicked_points:
             add_clicked_point({"x": pt.get("x"), "y": pt.get("y")})
     
-    # Determine which clicked points already have annotations
+    # Determine which clicked points already have annotations.
     annotated_coords = []
     non_annotated_coords = []
     tolerance = 5
@@ -88,7 +90,7 @@ if uploaded_file is not None:
         else:
             non_annotated_coords.append(pt)
     
-    # Update the figure: red markers for non-annotated points, green for annotated
+    # Update the figure: red markers for non-annotated points, green for annotated.
     if non_annotated_coords:
         fig.add_scatter(
             x=[pt["x"] for pt in non_annotated_coords],
@@ -112,7 +114,6 @@ if uploaded_file is not None:
     
     # 3. For each non-annotated clicked point, display a form to add annotation details.
     for pt in non_annotated_coords:
-        # Use an expander so the form is hidden until expanded.
         with st.expander(f"Add Annotation at (x={pt['x']:.0f}, y={pt['y']:.0f})"):
             location = st.selectbox("Select location:", LOCATIONS, key=f"loc_{pt['x']}_{pt['y']}")
             annotation_value = ""
@@ -132,7 +133,6 @@ if uploaded_file is not None:
                 st.session_state.annotations.append(annotation)
                 st.session_state.next_id += 1
                 st.success(f"Annotation {annotation['id']} added!")
-                # No forced rerun; the app will update on the next interaction.
     
     # 4. Display current annotations in the sidebar with delete options.
     st.sidebar.title("Annotations")
@@ -142,7 +142,6 @@ if uploaded_file is not None:
             if st.sidebar.button("Delete", key=f"delete_{ann['id']}"):
                 st.session_state.annotations = [a for a in st.session_state.annotations if a["id"] != ann["id"]]
                 st.sidebar.success(f"Annotation {ann['id']} deleted!")
-                # No forced rerun here either.
     else:
         st.sidebar.write("No annotations yet.")
     
@@ -151,8 +150,8 @@ if uploaded_file is not None:
         annotated_image = resized_image.copy()
         draw = ImageDraw.Draw(annotated_image)
         try:
-            # Double the text size by using a larger font (48 instead of 24)
-            font = ImageFont.truetype("arial.ttf", 48)
+            # Use a larger font size (double the previous size, 96 instead of 48)
+            font = ImageFont.truetype("arial.ttf", 96)
         except Exception:
             font = ImageFont.load_default()
         for ann in st.session_state.annotations:
