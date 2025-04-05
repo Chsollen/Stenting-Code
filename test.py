@@ -11,7 +11,8 @@ st.title("Venous Pressure Annotation App (Without st_canvas)")
 
 st.write("""
 Upload an image, then click on the image to add annotation points.  
-Each click is recorded and you can select a venous location and enter a pressure value.
+Each click is recorded and a red marker is shown on the image.  
+For each new (red) marker, expand the form below the image to select a venous location and enter a pressure value.
 """)
 
 # Venous locations list, including "Occlusion"
@@ -29,11 +30,21 @@ LOCATIONS = [
     "Occlusion"
 ]
 
-# Initialize session state for annotations and next annotation ID
+# Initialize session state for annotations, clicked points, and next annotation ID
 if "annotations" not in st.session_state:
-    st.session_state.annotations = []
+    st.session_state.annotations = []  # List of dicts: {id, x, y, location, value}
 if "next_id" not in st.session_state:
     st.session_state.next_id = 1
+if "clicked_points" not in st.session_state:
+    st.session_state.clicked_points = []  # List of dicts: {x, y}
+
+def add_clicked_point(new_point):
+    """Add a new clicked point if not already present (within a 5-pixel tolerance)."""
+    tolerance = 5
+    for p in st.session_state.clicked_points:
+        if abs(p["x"] - new_point["x"]) < tolerance and abs(p["y"] - new_point["y"]) < tolerance:
+            return
+    st.session_state.clicked_points.append(new_point)
 
 # 1. Upload Image
 uploaded_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
@@ -44,16 +55,14 @@ if uploaded_file is not None:
     display_ratio = display_width / image.width
     display_height = int(image.height * display_ratio)
     resized_image = image.resize((display_width, display_height))
-    st.image(resized_image, caption="Uploaded Image", width=display_width)
-
+    
     # Convert the PIL image to a numpy array for Plotly
     img_array = np.array(resized_image)
-
+    
     # 2. Create a Plotly figure to display the image and capture click events
     fig = px.imshow(img_array)
     fig.update_layout(clickmode='event+select')
-    st.write("Click on the image to mark annotations:")
-
+    
     # Capture click events on the Plotly image
     clicked_points = plotly_events(
         fig,
@@ -61,37 +70,71 @@ if uploaded_file is not None:
         override_height=display_height,
         override_width=display_width
     )
-
-    # 3. Process each click event using a form so the "Add Annotation" button is visible
+    
+    # Update session state with new clicked points
     if clicked_points:
-        for point in clicked_points:
-            x = point.get('x')
-            y = point.get('y')
-            with st.form(key=f"form_{x}_{y}"):
-                # Display the coordinates with larger text
-                st.markdown(f"<h2>Annotation at (x={x:.0f}, y={y:.0f})</h2>", unsafe_allow_html=True)
-                location = st.selectbox("Select location:", LOCATIONS, key=f"loc_{x}_{y}")
-                if location != "Select...":
-                    if location == "Occlusion":
-                        annotation_value = "OCL"
-                    else:
-                        annotation_value = st.text_input("Enter pressure value (mmHg):", key=f"val_{x}_{y}")
+        for pt in clicked_points:
+            add_clicked_point({"x": pt.get("x"), "y": pt.get("y")})
+    
+    # Determine which clicked points already have annotations
+    annotated_coords = []
+    non_annotated_coords = []
+    tolerance = 5
+    for pt in st.session_state.clicked_points:
+        found = any(abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
+                    for ann in st.session_state.annotations)
+        if found:
+            annotated_coords.append(pt)
+        else:
+            non_annotated_coords.append(pt)
+    
+    # Update the figure: red markers for non-annotated points, green for annotated
+    if non_annotated_coords:
+        fig.add_scatter(
+            x=[pt["x"] for pt in non_annotated_coords],
+            y=[pt["y"] for pt in non_annotated_coords],
+            mode="markers",
+            marker=dict(size=12, color="red"),
+            name="New Annotations"
+        )
+    if annotated_coords:
+        fig.add_scatter(
+            x=[pt["x"] for pt in annotated_coords],
+            y=[pt["y"] for pt in annotated_coords],
+            mode="markers",
+            marker=dict(size=12, color="green"),
+            name="Annotated"
+        )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.write("Below are forms for adding details to new annotations (red markers).")
+    
+    # 3. For each non-annotated clicked point, display a form to add annotation details.
+    for pt in non_annotated_coords:
+        # Use an expander so the form is hidden until expanded.
+        with st.expander(f"Add Annotation at (x={pt['x']:.0f}, y={pt['y']:.0f})"):
+            location = st.selectbox("Select location:", LOCATIONS, key=f"loc_{pt['x']}_{pt['y']}")
+            annotation_value = ""
+            if location != "Select...":
+                if location == "Occlusion":
+                    annotation_value = "OCL"
                 else:
-                    annotation_value = ""
-                submitted = st.form_submit_button("Add Annotation")
-                if submitted and location != "Select...":
-                    annotation = {
-                        "id": st.session_state.next_id,
-                        "x": x,
-                        "y": y,
-                        "location": location,
-                        "value": annotation_value
-                    }
-                    st.session_state.annotations.append(annotation)
-                    st.session_state.next_id += 1
-                    st.success(f"Annotation {annotation['id']} added!")
-
-    # 4. Display current annotations in the sidebar with delete options
+                    annotation_value = st.text_input("Enter pressure value (mmHg):", key=f"val_{pt['x']}_{pt['y']}")
+            if location != "Select..." and st.button("Save Annotation", key=f"save_{pt['x']}_{pt['y']}"):
+                annotation = {
+                    "id": st.session_state.next_id,
+                    "x": pt["x"],
+                    "y": pt["y"],
+                    "location": location,
+                    "value": annotation_value
+                }
+                st.session_state.annotations.append(annotation)
+                st.session_state.next_id += 1
+                st.success(f"Annotation {annotation['id']} added!")
+                st.experimental_rerun()
+    
+    # 4. Display current annotations in the sidebar with delete options.
     st.sidebar.title("Annotations")
     if st.session_state.annotations:
         for ann in st.session_state.annotations.copy():
@@ -102,10 +145,9 @@ if uploaded_file is not None:
                 st.experimental_rerun()
     else:
         st.sidebar.write("No annotations yet.")
-
-    # 5. Generate annotated image and summary table as PNG for download
+    
+    # 5. Generate annotated image and summary table as PNG for download.
     if st.button("Generate and Save Annotated Image"):
-        # Create a copy of the resized image to draw annotations on
         annotated_image = resized_image.copy()
         draw = ImageDraw.Draw(annotated_image)
         try:
@@ -113,8 +155,6 @@ if uploaded_file is not None:
             font = ImageFont.truetype("arial.ttf", 48)
         except Exception:
             font = ImageFont.load_default()
-        
-        # Draw each annotation on the image using the specified pressure value or OCL
         for ann in st.session_state.annotations:
             text = ann["value"]
             offset = (5, -5)
@@ -126,21 +166,17 @@ if uploaded_file is not None:
                 stroke_width=2,
                 stroke_fill="black"
             )
-        
-        # Save the annotated image to a bytes buffer
         buf_img = io.BytesIO()
         annotated_image.save(buf_img, format="PNG")
         annotated_image_bytes = buf_img.getvalue()
         
-        # Create a summary table (excluding annotations with "Occlusion")
         df_full = pd.DataFrame(st.session_state.annotations)
         if not df_full.empty:
             df_summary = df_full[df_full["location"] != "Occlusion"][["location", "value"]]
         else:
             df_summary = pd.DataFrame(columns=["location", "value"])
         
-        # Generate a PNG image of the summary table using matplotlib
-        fig_table, ax = plt.subplots(figsize=(6, len(df_summary)*0.5 + 1))
+        fig_table, ax = plt.subplots(figsize=(6, len(df_summary) * 0.5 + 1))
         ax.axis('tight')
         ax.axis('off')
         table = ax.table(
@@ -162,6 +198,7 @@ if uploaded_file is not None:
         buf_table.seek(0)
         table_png = buf_table.getvalue()
         
-        # Provide download buttons for the annotated image and summary table
-        st.download_button("Download Annotated Image", data=annotated_image_bytes, file_name="annotated_image.png", mime="image/png")
-        st.download_button("Download Summary Table (PNG)", data=table_png, file_name="summary_table.png", mime="image/png")
+        st.download_button("Download Annotated Image", data=annotated_image_bytes,
+                           file_name="annotated_image.png", mime="image/png")
+        st.download_button("Download Summary Table (PNG)", data=table_png,
+                           file_name="summary_table.png", mime="image/png")
