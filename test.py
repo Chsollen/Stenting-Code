@@ -167,7 +167,7 @@ if uploaded_file is not None:
         draw_right = ImageDraw.Draw(right_image)
         # Try to use a bold font; if unavailable, fall back to a regular one. Set font size to 200.
         try:
-            font = ImageFont.truetype("arialbd.ttf", 200)
+            font = ImageFont.truetype("arialbd.ttf", 1000)
         except Exception:
             try:
                 font = ImageFont.truetype("arial.ttf", 200)
