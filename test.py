@@ -60,7 +60,7 @@ if uploaded_file is not None:
     img_array = np.array(resized_image)
     
     # 2. Create a Plotly figure to display the image and capture click events.
-    # Reverse the y-axis so that coordinates match the PIL image.
+    # Reverse the y-axis so coordinates match the PIL image.
     fig = px.imshow(img_array)
     fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
@@ -145,9 +145,9 @@ if uploaded_file is not None:
     else:
         st.sidebar.write("No annotations yet.")
     
-    # 5. Generate annotated image and display it side by side with the clicked image.
+    # 5. Generate and display the clicked image and the annotated image side by side.
     if st.button("Generate and Save Annotated Image"):
-        # Create an image with markers drawn on it (Clicked Image)
+        # Create the Clicked Image with markers.
         clicked_image = resized_image.copy()
         draw_click = ImageDraw.Draw(clicked_image)
         tolerance = 5
@@ -158,7 +158,7 @@ if uploaded_file is not None:
             r = 6  # marker radius
             draw_click.ellipse([(pt["x"] - r, pt["y"] - r), (pt["x"] + r, pt["y"] + r)], fill=color, outline=color)
         
-        # Create Annotated Image with text drawn on it.
+        # Create the Annotated Image with text drawn on it.
         annotated_image = resized_image.copy()
         draw_text = ImageDraw.Draw(annotated_image)
         try:
@@ -172,12 +172,10 @@ if uploaded_file is not None:
             draw_text.text((ann["x"] + offset[0], ann["y"] + offset[1]), text,
                            fill="#FFFFFF", font=font, stroke_width=2, stroke_fill="black")
         
-        # Display the two images side by side.
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(clicked_image, caption="Clicked Image (with markers)", use_column_width=True)
-        with col2:
-            st.image(annotated_image, caption="Annotated Image (with text)", use_column_width=True)
+        # Use st.columns with explicit ratios to display images side by side.
+        cols = st.columns([1, 1])
+        cols[0].image(clicked_image, caption="Clicked Image (with markers)", use_column_width=True)
+        cols[1].image(annotated_image, caption="Annotated Image (with text)", use_column_width=True)
         
         # Save annotated image to bytes for download.
         buf_img = io.BytesIO()
