@@ -180,15 +180,20 @@ if uploaded_file is not None:
 
         for ann in st.session_state.annotations:
             text = ann["value"]
-            offset = (5, -5)
+            # Get text size (width, height) using the font
+            text_width, text_height = font.getsize(text)
+            # Center the text at the annotation point
+            x = ann["x"] - text_width / 2
+            y = ann["y"] - text_height / 2
             draw_right.text(
-                (ann["x"] + offset[0], ann["y"] + offset[1]),
+                (x, y),
                 text,
                 fill="#FFFFFF",
                 font=font,
                 stroke_width=2,
                 stroke_fill="black"
             )
+
         
         # Display the two images side by side using columns.
         col1, col2 = st.columns(2)
