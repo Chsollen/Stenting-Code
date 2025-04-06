@@ -180,8 +180,10 @@ if uploaded_file is not None:
 
         for ann in st.session_state.annotations:
             text = ann["value"]
-            # Get text size (width, height) using the font
-            text_width, text_height = font.getsize(text)
+            # Compute text bounding box: (left, top, right, bottom)
+            bbox = font.getbbox(text)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
             # Center the text at the annotation point
             x = ann["x"] - text_width / 2
             y = ann["y"] - text_height / 2
@@ -193,6 +195,7 @@ if uploaded_file is not None:
                 stroke_width=2,
                 stroke_fill="black"
             )
+
 
         
         # Display the two images side by side using columns.
