@@ -167,13 +167,13 @@ if uploaded_file is not None:
         draw_right = ImageDraw.Draw(right_image)
         # Try to use a bold font; if unavailable, fall back to a regular one. Set font size to 200.
         try:
-            font = ImageFont.truetype("arialbd.ttf", 1000)
+            font = ImageFont.truetype("arialbd.ttf", 100)
         except Exception as e1:
             try:
-                font = ImageFont.truetype("arial.ttf", 1000)
+                font = ImageFont.truetype("arial.ttf", 100)
             except Exception as e2:
                 try:
-                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 1000)
+                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 100)
                 except Exception as e3:
                     st.error("No custom font available; falling back to default font (text may be small).")
                     font = ImageFont.load_default()
