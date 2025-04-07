@@ -11,10 +11,10 @@ st.title("Venous Pressure Annotation App")
 
 st.write("""
 Upload an image, then click on the image to add annotation points.  
-Each click is recorded and you can add annotation details (location, pressure, and side if applicable) via the forms below.
+Each click is recorded and you can add annotation details (location and pressure) via the forms below.
 """)
 
-# Updated locations list without preset sidedness.
+# Updated locations list (Occlusion removed).
 LOCATIONS = [
     "Select...",
     "Torcula",
@@ -32,7 +32,7 @@ LOCATIONS = [
     "Inferior Vena Cava",
     "Stenosis",
     "Pre-Stenosis",
-    "Post-Stenosis",
+    "Post-Stenosis"
 ]
 
 # Define which locations require a side selection.
@@ -147,9 +147,7 @@ if uploaded_file is not None:
                 
                 # For "Stenosis", we don't prompt for pressure input; we add a big X instead.
                 if location != "Select...":
-                    if location == "Occlusion":
-                        annotation_value = "OCL"
-                    elif location == "Stenosis":
+                    if location == "Stenosis":
                         annotation_value = "X"
                     else:
                         annotation_value = st.text_input("Enter pressure value (mmHg):", key=f"val_{pt['x']}_{pt['y']}")
@@ -168,7 +166,7 @@ if uploaded_file is not None:
                             "location": location,
                             "value": annotation_value
                         }
-                        # Add side if applicable.
+                        # Save sidedness only for the table, but not used in the annotated image.
                         if location in SIDE_REQUIRED:
                             annotation["side"] = side
                         st.session_state.annotations.append(annotation)
@@ -179,6 +177,7 @@ if uploaded_file is not None:
     st.sidebar.title("Annotations")
     if st.session_state.annotations:
         for ann in st.session_state.annotations.copy():
+            # Show side info in sidebar if available.
             extra = f" - {ann['side']}" if "side" in ann else ""
             st.sidebar.write(f"ID {ann['id']}: {ann['location']}{extra} - {ann['value']}")
             if st.sidebar.button("Delete", key=f"delete_{ann['id']}"):
@@ -240,8 +239,6 @@ if uploaded_file is not None:
                             font = ImageFont.load_default()
             else:
                 text = ann["value"]
-                if "side" in ann:
-                    text = f"{ann['side']} {ann['value']}"
                 font = base_font
             
             # Compute text bounding box and center the text at the annotation point.
@@ -271,10 +268,17 @@ if uploaded_file is not None:
         right_image.save(buf_img, format="PNG")
         annotated_image_bytes = buf_img.getvalue()
         
-        # Generate a summary table as before.
+        # Generate a summary table with only pressure measurements.
         df_full = pd.DataFrame(st.session_state.annotations)
         if not df_full.empty:
-            df_summary = df_full[df_full["location"] != "Occlusion"][["location", "value"]]
+            # Exclude annotations for "Stenosis" from the table.
+            df_summary = df_full[~df_full["location"].isin(["Stenosis"])].copy()
+            # Combine sidedness into the location if applicable.
+            df_summary["location"] = df_summary.apply(
+                lambda row: f"{row['side']} {row['location']}" if "side" in row and row["side"] != "Select..." else row["location"],
+                axis=1
+            )
+            df_summary = df_summary[["location", "value"]]
         else:
             df_summary = pd.DataFrame(columns=["location", "value"])
         
