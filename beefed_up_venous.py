@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import io
 import matplotlib.pyplot as plt
+import requests  # For calling the FastAPI backend
 
 st.title("Venous Pressure Annotation App")
 
@@ -49,21 +50,31 @@ SIDE_REQUIRED = [
 
 # Initialize session state for annotations, clicked points, rotation, and next annotation ID
 if "annotations" not in st.session_state:
-    st.session_state.annotations = []  # Each is a dict: {id, x, y, location, value, (side)}
+    st.session_state.annotations = []  # Each annotation: {id, x, y, location, value, (side)}
 if "next_id" not in st.session_state:
     st.session_state.next_id = 1
 if "clicked_points" not in st.session_state:
-    st.session_state.clicked_points = []  # Each is a dict: {x, y}
+    st.session_state.clicked_points = []  # Each clicked point: {x, y}
 if "rotation_angle" not in st.session_state:
     st.session_state.rotation_angle = 0
 
 def add_clicked_point(new_point):
-    """Add a new clicked point if not already present (within a 5-pixel tolerance)."""
+    """Add a new clicked point if not already present (using a tolerance)."""
     tolerance = 5
     for p in st.session_state.clicked_points:
         if abs(p["x"] - new_point["x"]) < tolerance and abs(p["y"] - new_point["y"]) < tolerance:
             return
     st.session_state.clicked_points.append(new_point)
+
+# Function to send annotation data to your FastAPI backend.
+def send_annotation_to_api(annotation):
+    # Retrieve API key from Streamlit secrets.
+    api_key = st.secrets["api_keys"]["my_service"]
+    # Adjust the endpoint to the URL where your FastAPI backend is deployed.
+    endpoint = "http://127.0.0.1:8000/save_annotation"
+    headers = {"api_key": api_key, "Content-Type": "application/json"}
+    response = requests.post(endpoint, json=annotation, headers=headers)
+    return response
 
 # 1. Upload Image
 uploaded_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
@@ -103,18 +114,13 @@ if uploaded_file is not None:
         )
     
     # Capture new click events on the Plotly image.
-    new_clicked = plotly_events(
-        fig,
-        click_event=True,
-        override_height=display_height,
-        override_width=display_width
-    )
+    new_clicked = plotly_events(fig, click_event=True, override_height=display_height, override_width=display_width)
     if new_clicked:
         for pt in new_clicked:
             add_clicked_point({"x": pt.get("x"), "y": pt.get("y")})
     
     # Refresh the Plotly figure with all clicked points.
-    fig.data = []  # clear previous traces
+    fig.data = []  # Clear previous traces
     fig = px.imshow(img_array)
     fig.update_yaxes(autorange='reversed')
     fig.update_layout(clickmode='event+select')
@@ -140,12 +146,12 @@ if uploaded_file is not None:
         if not already_annotated:
             with st.expander(f"Add Annotation at (x={pt['x']:.0f}, y={pt['y']:.0f})"):
                 location = st.selectbox("Select location:", LOCATIONS, key=f"loc_{pt['x']}_{pt['y']}")
-                # Initialize side as "Select..." for later use if needed.
+                # Initialize side as "Select..." if needed.
                 side = "Select..."
                 if location in SIDE_REQUIRED:
                     side = st.selectbox("Select side:", ["Select...", "Left", "Right"], key=f"side_{pt['x']}_{pt['y']}")
                 
-                # For "Stenosis", we don't prompt for pressure input; we add a big X instead.
+                # For "Stenosis", no pressure input is needed; add a big X.
                 if location != "Select...":
                     if location == "Stenosis":
                         annotation_value = "X"
@@ -154,7 +160,7 @@ if uploaded_file is not None:
                 else:
                     annotation_value = ""
                 
-                # Save annotation only if location is selected and (if required) side is selected.
+                # Save annotation only if location is selected and (if required) side is provided.
                 if location != "Select..." and st.button("Save Annotation", key=f"save_{pt['x']}_{pt['y']}"):
                     if location in SIDE_REQUIRED and side == "Select...":
                         st.error("Please select a side (Left or Right) for this location.")
@@ -166,12 +172,18 @@ if uploaded_file is not None:
                             "location": location,
                             "value": annotation_value
                         }
-                        # Save sidedness only for the table.
                         if location in SIDE_REQUIRED:
                             annotation["side"] = side
                         st.session_state.annotations.append(annotation)
                         st.session_state.next_id += 1
                         st.success(f"Annotation {annotation['id']} added!")
+                        
+                        # Send annotation data to the FastAPI backend.
+                        api_response = send_annotation_to_api(annotation)
+                        if api_response.status_code == 200:
+                            st.info("Annotation successfully saved to backend!")
+                        else:
+                            st.error("Failed to save annotation to backend.")
     
     # 4. Display current annotations in the sidebar with delete options.
     st.sidebar.title("Annotations")
@@ -186,17 +198,17 @@ if uploaded_file is not None:
         st.sidebar.write("No annotations yet.")
     
     # 5. Generate and display side by side:
-    #    - Left: The original image (the one you clicked on) with drawn markers.
-    #    - Right: The annotated image with large text drawn.
+    #    - Left: The original image (with markers drawn).
+    #    - Right: The annotated image (with large text drawn).
     if st.button("Generate and Save Annotated Image"):
-        # Left image: Draw markers (red if unannotated, green if annotated) on a copy of the original resized image.
+        # Draw markers on the left image.
         left_image = resized_image.copy()
         draw_left = ImageDraw.Draw(left_image)
         r = 6  # marker radius
         tolerance = 5
         for pt in st.session_state.clicked_points:
             annotated = any(
-                abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance 
+                abs(ann["x"] - pt["x"]) < tolerance and abs(ann["y"] - pt["y"]) < tolerance
                 for ann in st.session_state.annotations
             )
             color = "green" if annotated else "red"
@@ -206,10 +218,9 @@ if uploaded_file is not None:
                 outline=color
             )
         
-        # Right image: Draw the annotation text onto a copy of the original image.
+        # Draw annotation texts on the right image.
         right_image = resized_image.copy()
         draw_right = ImageDraw.Draw(right_image)
-        # Try to use a bold font; if unavailable, fall back to a regular one. Base font size is 40.
         try:
             base_font = ImageFont.truetype("arialbd.ttf", 40)
         except Exception as e1:
@@ -223,11 +234,10 @@ if uploaded_file is not None:
                     base_font = ImageFont.load_default()
 
         for ann in st.session_state.annotations:
-            # For "Stenosis", use a smaller, red X.
             if ann["location"] == "Stenosis":
                 text = "X"
                 try:
-                    font = ImageFont.truetype("arialbd.ttf", 40)  # half the original 80
+                    font = ImageFont.truetype("arialbd.ttf", 40)  # smaller, red X
                 except Exception as e1:
                     try:
                         font = ImageFont.truetype("arial.ttf", 40)
@@ -242,7 +252,6 @@ if uploaded_file is not None:
                 font = base_font
                 fill_color = "#FFFFFF"
             
-            # Compute text bounding box and center the text at the annotation point.
             bbox = font.getbbox(text)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
@@ -257,14 +266,13 @@ if uploaded_file is not None:
                 stroke_fill="black"
             )
 
-        # Display the two images side by side using columns.
         col1, col2 = st.columns(2)
         with col1:
             st.image(left_image, caption="Original Image (with markers)", use_container_width=True)
         with col2:
             st.image(right_image, caption="Annotated Image (with large text)", use_container_width=True)
         
-        # Save the annotated image to bytes for download.
+        # Save annotated image for download.
         buf_img = io.BytesIO()
         right_image.save(buf_img, format="PNG")
         annotated_image_bytes = buf_img.getvalue()
@@ -274,18 +282,19 @@ if uploaded_file is not None:
         if not df_full.empty:
             # Exclude annotations for "Stenosis" from the table.
             df_summary = df_full[~df_full["location"].isin(["Stenosis"])].copy()
-            # Fill missing sidedness with empty strings to avoid "nan"
             if "side" in df_summary.columns:
                 df_summary["side"] = df_summary["side"].fillna("")
-            # Combine sidedness into the location if applicable.
             df_summary["location"] = df_summary.apply(
-                lambda row: f"{row['side']} {row['location']}".strip() if row.get("side", "") and row["side"] != "Select..." else row["location"],
+                lambda row: f"{row['side']} {row['location']}".strip() 
+                    if row.get("side", "") and row["side"] != "Select..." 
+                    else row["location"],
                 axis=1
             )
             df_summary = df_summary[["location", "value"]]
         else:
             df_summary = pd.DataFrame(columns=["location", "value"])
         
+        # Create a PNG table for download.
         fig_table, ax = plt.subplots(figsize=(6, len(df_summary) * 0.5 + 1))
         ax.axis('tight')
         ax.axis('off')
@@ -308,7 +317,15 @@ if uploaded_file is not None:
         buf_table.seek(0)
         table_png = buf_table.getvalue()
         
+        # Create an Excel file from the summary DataFrame.
+        excel_buffer = io.BytesIO()
+        df_summary.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
+        
         st.download_button("Download Annotated Image", data=annotated_image_bytes,
                            file_name="annotated_image.png", mime="image/png")
         st.download_button("Download Summary Table (PNG)", data=table_png,
                            file_name="summary_table.png", mime="image/png")
+        st.download_button("Download Master Excel File", data=excel_buffer,
+                           file_name="master_annotations.xlsx", 
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
