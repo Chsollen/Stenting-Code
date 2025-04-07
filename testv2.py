@@ -166,7 +166,7 @@ if uploaded_file is not None:
                             "location": location,
                             "value": annotation_value
                         }
-                        # Save sidedness only for the table, but not used in the annotated image.
+                        # Save sidedness only for the table.
                         if location in SIDE_REQUIRED:
                             annotation["side"] = side
                         st.session_state.annotations.append(annotation)
@@ -177,7 +177,6 @@ if uploaded_file is not None:
     st.sidebar.title("Annotations")
     if st.session_state.annotations:
         for ann in st.session_state.annotations.copy():
-            # Show side info in sidebar if available.
             extra = f" - {ann['side']}" if "side" in ann else ""
             st.sidebar.write(f"ID {ann['id']}: {ann['location']}{extra} - {ann['value']}")
             if st.sidebar.button("Delete", key=f"delete_{ann['id']}"):
@@ -210,7 +209,7 @@ if uploaded_file is not None:
         # Right image: Draw the annotation text onto a copy of the original image.
         right_image = resized_image.copy()
         draw_right = ImageDraw.Draw(right_image)
-        # Try to use a bold font; if unavailable, fall back to a regular one. Set base font size to 40.
+        # Try to use a bold font; if unavailable, fall back to a regular one. Base font size is 40.
         try:
             base_font = ImageFont.truetype("arialbd.ttf", 40)
         except Exception as e1:
@@ -224,22 +223,24 @@ if uploaded_file is not None:
                     base_font = ImageFont.load_default()
 
         for ann in st.session_state.annotations:
-            # For "Stenosis", override the text and use a larger font.
+            # For "Stenosis", use a smaller, red X.
             if ann["location"] == "Stenosis":
                 text = "X"
                 try:
-                    font = ImageFont.truetype("arialbd.ttf", 80)
+                    font = ImageFont.truetype("arialbd.ttf", 40)  # half the original 80
                 except Exception as e1:
                     try:
-                        font = ImageFont.truetype("arial.ttf", 80)
+                        font = ImageFont.truetype("arial.ttf", 40)
                     except Exception as e2:
                         try:
-                            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 80)
+                            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 40)
                         except Exception as e3:
                             font = ImageFont.load_default()
+                fill_color = "red"
             else:
                 text = ann["value"]
                 font = base_font
+                fill_color = "#FFFFFF"
             
             # Compute text bounding box and center the text at the annotation point.
             bbox = font.getbbox(text)
@@ -250,7 +251,7 @@ if uploaded_file is not None:
             draw_right.text(
                 (x, y),
                 text,
-                fill="#FFFFFF",
+                fill=fill_color,
                 font=font,
                 stroke_width=2,
                 stroke_fill="black"
@@ -273,9 +274,12 @@ if uploaded_file is not None:
         if not df_full.empty:
             # Exclude annotations for "Stenosis" from the table.
             df_summary = df_full[~df_full["location"].isin(["Stenosis"])].copy()
+            # Fill missing sidedness with empty strings to avoid "nan"
+            if "side" in df_summary.columns:
+                df_summary["side"] = df_summary["side"].fillna("")
             # Combine sidedness into the location if applicable.
             df_summary["location"] = df_summary.apply(
-                lambda row: f"{row['side']} {row['location']}" if "side" in row and row["side"] != "Select..." else row["location"],
+                lambda row: f"{row['side']} {row['location']}".strip() if row.get("side", "") and row["side"] != "Select..." else row["location"],
                 axis=1
             )
             df_summary = df_summary[["location", "value"]]
