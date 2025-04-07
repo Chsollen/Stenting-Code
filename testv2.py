@@ -146,12 +146,16 @@ if uploaded_file is not None:
                 if location in SIDE_REQUIRED:
                     side = st.selectbox("Select side:", ["Select...", "Left", "Right"], key=f"side_{pt['x']}_{pt['y']}")
                 
-                annotation_value = ""
+                # For "Stenosis", we don't prompt for pressure input; we add a big X instead.
                 if location != "Select...":
                     if location == "Occlusion":
                         annotation_value = "OCL"
+                    elif location == "Stenosis":
+                        annotation_value = "X"
                     else:
                         annotation_value = st.text_input("Enter pressure value (mmHg):", key=f"val_{pt['x']}_{pt['y']}")
+                else:
+                    annotation_value = ""
                 
                 # Save annotation only if location is selected and (if required) side is selected.
                 if location != "Select..." and st.button("Save Annotation", key=f"save_{pt['x']}_{pt['y']}"):
@@ -208,29 +212,43 @@ if uploaded_file is not None:
         # Right image: Draw the annotation text onto a copy of the original image.
         right_image = resized_image.copy()
         draw_right = ImageDraw.Draw(right_image)
-        # Try to use a bold font; if unavailable, fall back to a regular one. Set font size to 40.
+        # Try to use a bold font; if unavailable, fall back to a regular one. Set base font size to 40.
         try:
-            font = ImageFont.truetype("arialbd.ttf", 40)
+            base_font = ImageFont.truetype("arialbd.ttf", 40)
         except Exception as e1:
             try:
-                font = ImageFont.truetype("arial.ttf", 40)
+                base_font = ImageFont.truetype("arial.ttf", 40)
             except Exception as e2:
                 try:
-                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 40)
+                    base_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 40)
                 except Exception as e3:
                     st.error("No custom font available; falling back to default font (text may be small).")
-                    font = ImageFont.load_default()
+                    base_font = ImageFont.load_default()
 
         for ann in st.session_state.annotations:
-            text = ann["value"]
-            # Optionally, add side to the displayed text if available.
-            if "side" in ann:
-                text = f"{ann['side']} {ann['value']}"
-            # Compute text bounding box: (left, top, right, bottom)
+            # For "Stenosis", override the text and use a larger font.
+            if ann["location"] == "Stenosis":
+                text = "X"
+                try:
+                    font = ImageFont.truetype("arialbd.ttf", 80)
+                except Exception as e1:
+                    try:
+                        font = ImageFont.truetype("arial.ttf", 80)
+                    except Exception as e2:
+                        try:
+                            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 80)
+                        except Exception as e3:
+                            font = ImageFont.load_default()
+            else:
+                text = ann["value"]
+                if "side" in ann:
+                    text = f"{ann['side']} {ann['value']}"
+                font = base_font
+            
+            # Compute text bounding box and center the text at the annotation point.
             bbox = font.getbbox(text)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
-            # Center the text at the annotation point
             x = ann["x"] - text_width / 2
             y = ann["y"] - text_height / 2
             draw_right.text(
