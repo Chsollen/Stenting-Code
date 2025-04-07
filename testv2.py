@@ -33,7 +33,6 @@ LOCATIONS = [
     "Stenosis",
     "Pre-Stenosis",
     "Post-Stenosis",
-    "Occlusion"
 ]
 
 # Define which locations require a side selection.
