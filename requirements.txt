@@ -1,7 +1,17 @@
-streamlit
-streamlit-plotly-events
-plotly
-Pillow
-pandas
-matplotlib
-numpy
+# Core web framework
+streamlit>=1.28.0
+
+# Interactive plotting and event handling
+streamlit-plotly-events>=0.0.6
+plotly>=5.17.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Data manipulation and export
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# Visualization
+matplotlib>=3.7.0
+numpy>=1.24.0
